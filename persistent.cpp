@@ -13,11 +13,14 @@
 #include <iostream>
 #include "get_option.h"
 
-#define REGISTRY_SETTINGS_LOCATION "Software\\Prey\\lock-screen"
+#define REGISTRY_SETTINGS_LOCATION "Software\\Pa8\\lock-screen"
 
 #ifndef ERROR_ELEVATION_REQUIRED
 #define ERROR_ELEVATION_REQUIRED (740)
 #endif // ERROR_ELEVATION_REQUIRED
+
+//#include <atlbase.h>
+//#include <msxml6.h>
 
 typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS)(HANDLE, PBOOL);
 

