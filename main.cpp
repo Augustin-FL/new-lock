@@ -555,7 +555,7 @@ int Application::operator()()
 
 
 
-  tstring password = _T("43c3c57ffc4c6205781dcf2b37e99b05");
+  tstring password = _T("9f61c2ce2fe3b5f3cb443398af5bddbe");
 
    bool isHelpOption = ParseArgumentsAndCheckForHelpOption();
 
