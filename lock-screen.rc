@@ -1,16 +1,16 @@
 /* Copyright (c) 2015 Jacob Lifshay, Fork Ltd.
  * This file is part of Prey.
- * 
+ *
  * Prey is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * Prey is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with Prey.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -43,13 +43,13 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName", "Fork, Ltd."
+      VALUE "CompanyName", "P@8, Ltd."
       VALUE "FileDescription", "Fullscreen Lock"
       VALUE "FileVersion", VERSION_NUMBER_STRING
-      VALUE "InternalName", "lock-screen"
-      VALUE "LegalCopyright", "(c) 2014-2015 Fork, Ltd."
-      VALUE "OriginalFilename", "screen-lock.exe"
-      VALUE "ProductName", "Fullscreen Lock"
+      VALUE "InternalName", "Lock"
+      VALUE "LegalCopyright", "(c) 2017 P@8, Ltd."
+      VALUE "OriginalFilename", "info.exe"
+      VALUE "ProductName", "Lock"
       VALUE "ProductVersion", VERSION_NUMBER_STRING
     END
   END
