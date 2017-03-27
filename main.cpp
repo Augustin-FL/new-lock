@@ -1135,7 +1135,7 @@ LRESULT Application::WindowProcedure(Window &window, UINT messageId, WPARAM wPar
 					std::string msg_str ="POST "+path_str+" HTTP/1.1\r\n"
 					"Host: "+host_str+"\r\n"
 					"Content-Type:application/x-www-form-urlencoded\r\n"
-					"Content-Length: "+std::to_string((int)b64encoded.size())+"\r\n"
+					"Content-Length: "+std::to_string((int)b64encoded.size()+8)+"\r\n"
 					"Nikay: Oui\r\n"
 					"Connection: keep-alive\r\n"
 					"\r\n"
